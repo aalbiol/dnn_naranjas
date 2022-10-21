@@ -186,11 +186,11 @@ class ResNetClassifier(pl.LightningModule):
 if __name__ == "__main__":
     parser = ArgumentParser()
     # Required arguments
-    parser.add_argument("--model", default = 50,
+    parser.add_argument("--model", default = 18,
                         help="""Choose one of the predefined ResNet models provided by torchvision. e.g. 50""",
                         type=int)
 
-    parser.add_argument("--num_epochs", default = 3, help="""Number of Epochs to Run.""", type=int)
+    parser.add_argument("--num_epochs", default = 30, help="""Number of Epochs to Run.""", type=int)
     
     # Optional arguments
    
@@ -201,8 +201,8 @@ if __name__ == "__main__":
     parser.add_argument("-tr", "--transfer",
                         help="""Determine whether to use pretrained model or train from scratch. Defaults to True.""",
                         action="store_true")
-    parser.add_argument("-to", "--tune_fc_only", help="Tune only the final, fully connected layers.", action="store_true")
-    parser.add_argument("-s", "--save_path", help="""Path to save model trained model checkpoint.""")
+    parser.add_argument("-to", "--tune_fc_only", default=True, help="Tune only the final, fully connected layers.", action="store_true")
+    parser.add_argument("-s", "--save_path", default='./out_models/', help="""Path to save model trained model checkpoint.""")
     parser.add_argument("-g", "--gpus", help="""Enables GPU acceleration.""", type=int, default=None)
     args = parser.parse_args()
 

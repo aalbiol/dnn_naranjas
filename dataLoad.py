@@ -69,7 +69,7 @@ def my_collate_fn(data):
 class FruitDataModule(pl.LightningDataModule):
     def __init__(self, train_set_folder = 'orange_data/train' , 
                 test_set_folder = 'orange_data/test',
-                batch_size: int =10,  
+                batch_size: int =5,  
                 imsize = (256,256), 
                 num_workers = -1, **kwargs):
         super().__init__()
