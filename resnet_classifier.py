@@ -60,21 +60,57 @@ class ResNetClassifier(pl.LightningModule):
     def forward(self, X, nviews):
         Y_all_views = self.resnet_model(X)
         tmp = torch.split(Y_all_views, nviews)
-        logits_fruit = torch.concat([torch.mean(fruit, axis = 0, keepdim= True) for fruit in tmp],axis = 0)
+        
+        #print("logits_views:", Y_all_views)
+        
+        # Aqui es donde se fusionan las instancias (vistas) para obtener un logit por fruto y categoría
+        # Se pueden fusionar por max o mean . La fusion debe ser conmutativa
+        #logits_fruit = torch.concat([torch.mean(fruit, axis = 0, keepdim= True) for fruit in tmp],axis = 0)
+        logits_fruit=[]
+        for fruit in tmp:
+            vals,pos=torch.max(fruit,0,keepdim=True)
+            logits_fruit.append(vals)
+        logits_fruit = torch.concat(logits_fruit,axis = 0)
+        
+        #print("logits_fruit:", logits_fruit)
+
         return logits_fruit
     
-    def criterion(self, logits, labels, weight_loss = 1.0):
-        defect_logits = logits.mean(axis=1)
-        labels_defect = (labels > 0).float()
-        binaryLoss = nn.BCEWithLogitsLoss()
-        loss = binaryLoss(defect_logits, labels_defect )
+    def criterion(self, logits, labels, weight_loss = 0.5):
+        #axis 0: batch_element
+        #axis 1: categorias.El primer elemento el de la categoria buena
+        print("criterion_logits:",logits.shape)
+        print("criterion_labels:",labels.shape)
+
         
-        defectuosos_logits = logits[labels > 0]
-        defectuosos_labels = labels[labels > 0]
+
+        idx_bueno = torch.squeeze(torch.argwhere(labels==0))
+        idx_malo = torch.squeeze(torch.argwhere(labels>0))
+        print("idx_bueno shape:",idx_bueno.shape)
+
+        binaryLoss = nn.BCEWithLogitsLoss(reduction='sum')
+        tipodefectoLoss = nn.CrossEntropyLoss(reduction='sum')
+
+        loss1 =0
+        loss2 =0
+        if idx_bueno.nelement()> 0 :
+            logits_defs=logits[idx_bueno]
+            print("logits_defs shape1:",logits_defs.shape)
+            logits_defs=logits_defs[:,1:]
+            print("logits_defs shape2:",logits_defs.shape)
+            logits_bueno,_ = torch.max(logits_defs,1)
+            target_bueno = labels[idx_bueno].float()
+           
+            print("logits shape:",logits.shape)
+            print("logits_bueno :",logits_bueno.dtype)
+            print("target_bueno :",target_bueno.dtype)
+            loss1 = binaryLoss(logits_bueno, target_bueno  )
         
-        if len(defectuosos_labels) > 0:
-            tipodefectoLoss = nn.CrossEntropyLoss()
-            loss += weight_loss * tipodefectoLoss(defectuosos_logits, defectuosos_labels)
+        if idx_malo.nelement() > 0:
+            defectuosos_logits = logits[idx_malo,1:]
+            defectuosos_labels = labels[idx_malo] -1           
+            loss2 += tipodefectoLoss(defectuosos_logits, defectuosos_labels)
+        loss = weight_loss * loss1 + (1-weight_loss) * loss2    
         return loss
             
         
