@@ -62,7 +62,7 @@ def my_collate_fn(data):
     labels = torch.tensor(labels) #(5)
     return { #(6)
         'images': images, 
-        'labels': labels,
+        'label': labels,
         'nviews': nviews
     }
     
@@ -75,7 +75,7 @@ class FruitDataModule(pl.LightningDataModule):
         super().__init__()
 
         print("Options in DataModule", kwargs)
-
+        
         self.batch_size = batch_size
 
         self.num_workers = num_workers if num_workers > 0 else multiprocessing.cpu_count()-1
@@ -107,9 +107,13 @@ class FruitDataModule(pl.LightningDataModule):
 
         self.num_classes = len(self.train_dataset.classes)
     
+        print(f"num clases = {self.num_classes}")
         print(f"len total trainset =   {len(self.train_dataset )}")
         print(f"len total testset =   {len(self.val_dataset )}")
-
+        print(self.train_dataset.classes)
+        print(self.train_dataset.class_to_idx)
+        print("batch_size in FruitDataModule", self.batch_size)
+        
 
         self.save_hyperparameters()
 
@@ -130,9 +134,11 @@ class FruitDataModule(pl.LightningDataModule):
         return None
         
     def train_dataloader(self):
+        print("batch_size in Dataloader train", self.batch_size)
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, collate_fn=my_collate_fn)
 
     def val_dataloader(self):
+        print("batch_size in Dataloader train", self.batch_size)
         return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=False,shuffle=False, collate_fn=my_collate_fn)
 
     # def test_dataloader(self):

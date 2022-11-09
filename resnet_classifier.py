@@ -35,6 +35,7 @@ class ResNetClassifier(pl.LightningModule):
         self.mean_normalization = (0.5,)
         self.std_normalization = (0.5,)
         self.__dict__.update(locals())
+        self.batch_size=batch_size
         resnets = {
             18: models.resnet18, 34: models.resnet34,
             50: models.resnet50, 101: models.resnet101,
@@ -81,51 +82,20 @@ class ResNetClassifier(pl.LightningModule):
     def configure_optimizers(self):
         return self.optimizer(self.parameters(), lr=self.lr)
     
-    # def train_dataloader(self):
-    #     # values here are specific to pneumonia dataset and should be changed for custom data
-    #     transform = transforms.Compose([
-    #             transforms.Resize(self.input_size),
-    #             transforms.RandomHorizontalFlip(0.3),
-    #             transforms.RandomVerticalFlip(0.3),
-    #             transforms.RandomApply([   
-    #                 transforms.RandomRotation(180)                    
-    #             ]),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize(self.mean_normalization, self.std_normalization)
-    #     ])
-    #     img_train = ImageFolder(self.train_path, transform=transform, loader=myloader)
-    #     return DataLoader(img_train, batch_size=self.batch_size, shuffle=True)
-    
-        # def val_dataloader(self):
-    #     # values here are specific to pneumonia dataset and should be changed for custom data
-    #     transform = transforms.Compose([
-    #             transforms.Resize(self.input_size),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize(self.mean_normalization, self.std_normalization)
-    #     ])
-        
-    #     img_val = ImageFolder(self.vld_path, transform=transform)
-        
-    #     return DataLoader(img_val, batch_size=1, shuffle=False)
 
-    # def test_dataloader(self):
-    #     # values here are specific to pneumonia dataset and should be changed for custom data
-    #     transform = transforms.Compose([
-    #             transforms.Resize((500,500)),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize( self.mean_normalization, (0.23051,))
-    #     ])
-        
-    #     img_test = ImageFolder(self.test_path, transform=transform)
-        
-    #     return DataLoader(img_test, batch_size=1, shuffle=False)    
     
     def training_step(self, batch, batch_idx):
         images = batch['images']
-        labels = batch['labels']
+        labels = batch['label']
         nviews = batch['nviews']
-        logits = self(images, nviews)
         
+ 
+        logits = self(images, nviews)
+
+        print('batch labels: ',labels)
+        print('batch nviews: ',nviews)       
+        print('batch logits: ',logits)
+
         loss = self.criterion(logits, labels)
         prob_healthy = torch.sigmoid(logits.mean(axis=1))
         acc_healthy = ((prob_healthy > 0.5).long() == (labels > 0).long()).sum() / prob_healthy.shape[0]
@@ -147,7 +117,7 @@ class ResNetClassifier(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         images = batch['images']
-        labels = batch['labels']
+        labels = batch['label']
         nviews = batch['nviews']
         logits = self(images, nviews)
         
@@ -190,14 +160,14 @@ if __name__ == "__main__":
                         help="""Choose one of the predefined ResNet models provided by torchvision. e.g. 50""",
                         type=int)
 
-    parser.add_argument("--num_epochs", default = 30, help="""Number of Epochs to Run.""", type=int)
+    parser.add_argument("--num_epochs", default = 3, help="""Number of Epochs to Run.""", type=int)
     
     # Optional arguments
    
     parser.add_argument("-o", "--optimizer", help="""PyTorch optimizer to use. Defaults to adam.""", default='sgd')
     parser.add_argument("-lr", "--learning_rate", help="Adjust learning rate of optimizer.", type=float, default=1e-3)
-    # parser.add_argument("-b", "--batch_size", help="""Manually determine batch size. Defaults to 16.""",
-    #                     type=int, default=10)
+    parser.add_argument("-b", "--batch_size", help="""Manually determine batch size. Defaults to 16.""",
+                         type=int, default=2)
     parser.add_argument("-tr", "--transfer",
                         help="""Determine whether to use pretrained model or train from scratch. Defaults to True.""",
                         action="store_true")
@@ -207,18 +177,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    datamodule = FruitDataModule()
+    datamodule = FruitDataModule(batch_size=args.batch_size)
 
     # # Instantiate Model
     model = ResNetClassifier(num_classes = datamodule.num_classes, resnet_version = args.model,
                             optimizer = args.optimizer, lr = args.learning_rate,
-                            #batch_size = args.batch_size,
+                            batch_size = args.batch_size,
                             transfer = args.transfer, tune_fc_only = args.tune_fc_only)
     # Instantiate lightning trainer and train model
     trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs}
     
     
-    
+    print('num_epochs:',args.num_epochs)
     
     trainer = pl.Trainer(**trainer_args)
     
