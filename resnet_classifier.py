@@ -79,36 +79,40 @@ class ResNetClassifier(pl.LightningModule):
     def criterion(self, logits, labels, weight_loss = 0.5):
         #axis 0: batch_element
         #axis 1: categorias.El primer elemento el de la categoria buena
-        print("criterion_logits:",logits.shape)
-        print("criterion_labels:",labels.shape)
+        #print("criterion_logits:",logits.shape)
+        #print("criterion_labels:",labels.shape)
 
         
 
         idx_bueno = torch.squeeze(torch.argwhere(labels==0))
         idx_malo = torch.squeeze(torch.argwhere(labels>0))
-        print("idx_bueno shape:",idx_bueno.shape)
+        
+        bool_bueno = (labels==0)
+        bool_malo = (labels>0)
+        #print("bool_bueno:",bool_bueno)
 
         binaryLoss = nn.BCEWithLogitsLoss(reduction='sum')
         tipodefectoLoss = nn.CrossEntropyLoss(reduction='sum')
 
         loss1 =0
         loss2 =0
-        if idx_bueno.nelement()> 0 :
-            logits_defs=logits[idx_bueno]
-            print("logits_defs shape1:",logits_defs.shape)
+        if torch.any(bool_bueno):
+            logits_defs=logits[bool_bueno]
+            #print("logits_defs shape1:",logits_defs.shape)
             logits_defs=logits_defs[:,1:]
-            print("logits_defs shape2:",logits_defs.shape)
+            #print("logits_defs shape2:",logits_defs.shape)
             logits_bueno,_ = torch.max(logits_defs,1)
-            target_bueno = labels[idx_bueno].float()
+            target_bueno = labels[bool_bueno].float()
            
-            print("logits shape:",logits.shape)
-            print("logits_bueno :",logits_bueno.dtype)
-            print("target_bueno :",target_bueno.dtype)
+           # print("logits shape:",logits.shape)
+           # print("logits_bueno :",logits_bueno.shape)
+           # print("target_bueno :",target_bueno.shape)
             loss1 = binaryLoss(logits_bueno, target_bueno  )
         
-        if idx_malo.nelement() > 0:
-            defectuosos_logits = logits[idx_malo,1:]
-            defectuosos_labels = labels[idx_malo] -1           
+        if torch.any(bool_malo) > 0:
+            defectuosos_logits = logits[bool_malo]
+            defectuosos_logits = defectuosos_logits[:,1:]
+            defectuosos_labels = labels[bool_malo] -1           
             loss2 += tipodefectoLoss(defectuosos_logits, defectuosos_labels)
         loss = weight_loss * loss1 + (1-weight_loss) * loss2    
         return loss
@@ -128,9 +132,9 @@ class ResNetClassifier(pl.LightningModule):
  
         logits = self(images, nviews)
 
-        print('batch labels: ',labels)
-        print('batch nviews: ',nviews)       
-        print('batch logits: ',logits)
+        #print('batch labels: ',labels)
+        #print('batch nviews: ',nviews)       
+        #print('batch logits: ',logits)
 
         loss = self.criterion(logits, labels)
         prob_healthy = torch.sigmoid(logits.mean(axis=1))
