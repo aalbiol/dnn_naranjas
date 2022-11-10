@@ -86,9 +86,9 @@ class FruitDataModule(pl.LightningDataModule):
         transforms.RandomHorizontalFlip(0.5),
         transforms.RandomVerticalFlip(0.5),
         transforms.RandomRotation(180) , 
-                          
+                                  
         transforms.ToTensor(),
-        transforms.Normalize((128,128,128), (73,73,73))
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])        
 
 
@@ -96,7 +96,7 @@ class FruitDataModule(pl.LightningDataModule):
         transforms.Resize((250,250)),
                
         transforms.ToTensor(),
-        transforms.Normalize((128,128,128), (73,73,73))
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])        
         
      

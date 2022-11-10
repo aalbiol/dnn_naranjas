@@ -14,6 +14,8 @@ from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
+import wandb
+from pytorch_lightning.loggers import WandbLogger
 from typing import Tuple,Any
 
 from dataLoad import FruitDataModule
@@ -68,8 +70,10 @@ class ResNetClassifier(pl.LightningModule):
         #logits_fruit = torch.concat([torch.mean(fruit, axis = 0, keepdim= True) for fruit in tmp],axis = 0)
         logits_fruit=[]
         for fruit in tmp:
-            vals,pos=torch.max(fruit,0,keepdim=True)
-            logits_fruit.append(vals)
+            #valsmax,posmax=torch.max(fruit,0,keepdim=True)
+            valsmin,posmin=torch.min(fruit[:,0],0,keepdim=True)
+            #logits_fruit.append(valsmax)
+            logits_fruit.append(fruit[(posmin,),:])
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
         #print("logits_fruit:", logits_fruit)
@@ -84,37 +88,39 @@ class ResNetClassifier(pl.LightningModule):
 
         
 
-        idx_bueno = torch.squeeze(torch.argwhere(labels==0))
-        idx_malo = torch.squeeze(torch.argwhere(labels>0))
+        #idx_bueno = torch.squeeze(torch.argwhere(labels==0))
+        #idx_malo = torch.squeeze(torch.argwhere(labels>0))
         
         bool_bueno = (labels==0)
         bool_malo = (labels>0)
         #print("bool_bueno:",bool_bueno)
 
         binaryLoss = nn.BCEWithLogitsLoss(reduction='sum')
-        tipodefectoLoss = nn.CrossEntropyLoss(reduction='sum')
+        tipodefectoLoss = nn.CrossEntropyLoss(reduction='mean')
 
-        loss1 =0
-        loss2 =0
-        if torch.any(bool_bueno):
-            logits_defs=logits[bool_bueno]
-            #print("logits_defs shape1:",logits_defs.shape)
-            logits_defs=logits_defs[:,1:]
-            #print("logits_defs shape2:",logits_defs.shape)
-            logits_bueno,_ = torch.max(logits_defs,1)
-            target_bueno = labels[bool_bueno].float()
+        # loss1 =0
+        # loss2 =0
+        # if torch.any(bool_bueno):
+        #     logits_defs=logits[bool_bueno]
+        #     #print("logits_defs shape1:",logits_defs.shape)
+        #     logits_defs=logits_defs[:,1:]
+        #     #print("logits_defs shape2:",logits_defs.shape)
+        #     logits_bueno,_ = torch.max(logits_defs,1)
+        #     target_bueno = labels[bool_bueno].float()
            
-           # print("logits shape:",logits.shape)
-           # print("logits_bueno :",logits_bueno.shape)
-           # print("target_bueno :",target_bueno.shape)
-            loss1 = binaryLoss(logits_bueno, target_bueno  )
+        #    # print("logits shape:",logits.shape)
+        #    # print("logits_bueno :",logits_bueno.shape)
+        #    # print("target_bueno :",target_bueno.shape)
+        #     loss1 = binaryLoss(logits_bueno, target_bueno  )
         
-        if torch.any(bool_malo) > 0:
-            defectuosos_logits = logits[bool_malo]
-            defectuosos_logits = defectuosos_logits[:,1:]
-            defectuosos_labels = labels[bool_malo] -1           
-            loss2 += tipodefectoLoss(defectuosos_logits, defectuosos_labels)
-        loss = weight_loss * loss1 + (1-weight_loss) * loss2    
+        # if torch.any(bool_malo) > 0:
+        #     defectuosos_logits = logits[bool_malo]
+        #     defectuosos_logits = defectuosos_logits[:,1:]
+        #     defectuosos_labels = labels[bool_malo] -1           
+        #     loss2 += tipodefectoLoss(defectuosos_logits, defectuosos_labels)
+        # loss = weight_loss * loss1 + (1-weight_loss) * loss2    
+
+        loss = tipodefectoLoss(logits,labels)
         return loss
             
         
@@ -137,19 +143,18 @@ class ResNetClassifier(pl.LightningModule):
         #print('batch logits: ',logits)
 
         loss = self.criterion(logits, labels)
-        prob_healthy = torch.sigmoid(logits.mean(axis=1))
-        acc_healthy = ((prob_healthy > 0.5).long() == (labels > 0).long()).sum() / prob_healthy.shape[0]
+ 
         
-        defectuosos_logits = logits[labels > 0]
-        defectuosos_labels = labels[labels > 0]
+
         
         
-        acc_tipo_defecto = (torch.argmax(defectuosos_logits,1) == defectuosos_labels) \
-                .type(torch.FloatTensor).mean() if defectuosos_labels.shape[0] > 0 else 1.0
+        acc_train = (torch.argmax(logits,1) == labels).type(torch.FloatTensor).mean() 
         # perform logging
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_acc", acc_train, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        #wandb.log({'accuracy': train_acc, 'loss': loss})
+        #self.log("train_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        #self.log("train_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
 
@@ -162,19 +167,11 @@ class ResNetClassifier(pl.LightningModule):
         logits = self(images, nviews)
         
         loss = self.criterion(logits, labels)
-        prob_healthy = torch.sigmoid(logits.mean(axis=1))
-        acc_healthy = ((prob_healthy > 0.5).long() == (labels > 0).long()).sum() / prob_healthy.shape[0]
-        
-        defectuosos_logits = logits[labels > 0]
-        defectuosos_labels = labels[labels > 0]
-        
-        
-        acc_tipo_defecto = (torch.argmax(defectuosos_logits,1) == defectuosos_labels) \
-                .type(torch.FloatTensor).mean() if defectuosos_labels.shape[0] > 0 else 1.0
+        acc_test = (torch.argmax(logits,1) == labels).type(torch.FloatTensor).mean() 
         # perform logging
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_acc", acc_test, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
         
 
 
@@ -225,7 +222,9 @@ if __name__ == "__main__":
                             batch_size = args.batch_size,
                             transfer = args.transfer, tune_fc_only = args.tune_fc_only)
     # Instantiate lightning trainer and train model
-    trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs}
+    miwandb= WandbLogger(name='REsnet 18', project='MILOranges')
+    trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs, 'logger' : miwandb}
+    
     
     
     print('num_epochs:',args.num_epochs)
