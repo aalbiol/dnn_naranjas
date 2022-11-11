@@ -70,10 +70,11 @@ class ResNetClassifier(pl.LightningModule):
         #logits_fruit = torch.concat([torch.mean(fruit, axis = 0, keepdim= True) for fruit in tmp],axis = 0)
         logits_fruit=[]
         for fruit in tmp:
-            #valsmax,posmax=torch.max(fruit,0,keepdim=True)
+            valsmax,posmax=torch.max(fruit,0,keepdim=True)
             valsmin,posmin=torch.min(fruit[:,0],0,keepdim=True)
             #logits_fruit.append(valsmax)
-            logits_fruit.append(fruit[(posmin,),:])
+            #logits_fruit.append(fruit[(posmin,),:])
+            logits_fruit.append(torch.contatenate((valsmin[0],valsmax[1:]))
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
         #print("logits_fruit:", logits_fruit)
@@ -147,11 +148,13 @@ class ResNetClassifier(pl.LightningModule):
         
 
         
-        
-        acc_train = (torch.argmax(logits,1) == labels).type(torch.FloatTensor).mean() 
+        predictions=torch.argmax(logits,1) 
+        acc_train = (predictions== labels).type(torch.FloatTensor).mean() 
+        acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_acc", acc_train, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_acc_good_bad", acc_train_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         #wandb.log({'accuracy': train_acc, 'loss': loss})
         #self.log("train_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         #self.log("train_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
@@ -167,10 +170,13 @@ class ResNetClassifier(pl.LightningModule):
         logits = self(images, nviews)
         
         loss = self.criterion(logits, labels)
-        acc_test = (torch.argmax(logits,1) == labels).type(torch.FloatTensor).mean() 
+        predictions=torch.argmax(logits,1)
+        acc_test = (predictions == labels).type(torch.FloatTensor).mean() 
+        acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_acc", acc_test, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_acc", acc_test, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_acc_good_bad", acc_test_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         
 
