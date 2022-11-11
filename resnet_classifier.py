@@ -71,7 +71,8 @@ class ResNetClassifier(pl.LightningModule):
         logits_fruit=[]
         for fruit in tmp:
             valsmax,posmax=torch.max(fruit,0,keepdim=True)
-            valsmin,posmin=torch.min(fruit[:,0],0,keepdim=True)
+            #valsmin,posmin=torch.min(fruit[:,0],0,keepdim=True)
+            valsmin,posmin=torch.min(fruit,0,keepdim=True)
             #logits_fruit.append(valsmax)
             #logits_fruit.append(fruit[(posmin,),:])
             logits_fruit.append( torch.cat((valsmin[0],valsmax[1:])) )
