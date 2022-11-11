@@ -75,7 +75,8 @@ class ResNetClassifier(pl.LightningModule):
             valsmin,posmin=torch.min(fruit,0,keepdim=True)
             #logits_fruit.append(valsmax)
             #logits_fruit.append(fruit[(posmin,),:])
-            logits_fruit.append( torch.cat((valsmin[0],valsmax[1:])) )
+            print("AAShapes:",valsmin.shape,valsmax.shape)
+            logits_fruit.append( torch.cat((valsmin[:,(0,)],valsmax[:,1:]), dim=1) )
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
         #print("logits_fruit:", logits_fruit)
