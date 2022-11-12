@@ -1,0 +1,32 @@
+name: dnn2
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - mkl
+  - jupyter
+  - pandas
+  - matplotlib
+  - pytorch
+  - pillow
+  - SimpleITK
+  - pip
+  - opencv
+  - scikit-image
+  - attrdict
+  - pylint
+  - ipython
+  - torchvision
+  - pip:
+    - tqdm
+    - sklearn
+    - einops
+    - torch-summary
+    - datasets
+    - transformers
+    - tensorboardX
+    - pytorch-lightning
+    - wandb
+    - torchmetrics
+    - jsonargparse

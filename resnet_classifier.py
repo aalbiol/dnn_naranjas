@@ -75,7 +75,6 @@ class ResNetClassifier(pl.LightningModule):
             valsmin,posmin=torch.min(fruit,0,keepdim=True)
             #logits_fruit.append(valsmax)
             #logits_fruit.append(fruit[(posmin,),:])
-            print("AAShapes:",valsmin.shape,valsmax.shape)
             logits_fruit.append( torch.cat((valsmin[:,(0,)],valsmax[:,1:]), dim=1) )
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
@@ -152,11 +151,11 @@ class ResNetClassifier(pl.LightningModule):
         
         predictions=torch.argmax(logits,1) 
         acc_train = (predictions== labels).type(torch.FloatTensor).mean() 
-        acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
+        #acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_acc", acc_train, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc_good_bad", acc_train_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        #self.log("train_acc_good_bad", acc_train_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         #wandb.log({'accuracy': train_acc, 'loss': loss})
         #self.log("train_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         #self.log("train_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
@@ -174,11 +173,11 @@ class ResNetClassifier(pl.LightningModule):
         loss = self.criterion(logits, labels)
         predictions=torch.argmax(logits,1)
         acc_test = (predictions == labels).type(torch.FloatTensor).mean() 
-        acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
+        #acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("val_acc", acc_test, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val_acc_good_bad", acc_test_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        #self.log("val_acc_good_bad", acc_test_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         
 
@@ -219,6 +218,8 @@ if __name__ == "__main__":
     parser.add_argument("-to", "--tune_fc_only", default=True, help="Tune only the final, fully connected layers.", action="store_true")
     parser.add_argument("-s", "--save_path", default='./out_models/', help="""Path to save model trained model checkpoint.""")
     parser.add_argument("-g", "--gpus", help="""Enables GPU acceleration.""", type=int, default=None)
+    parser.add_argument("--log_name",help="""WandB log name""", default='REsnet 18')
+
     args = parser.parse_args()
 
 
@@ -230,7 +231,7 @@ if __name__ == "__main__":
                             batch_size = args.batch_size,
                             transfer = args.transfer, tune_fc_only = args.tune_fc_only)
     # Instantiate lightning trainer and train model
-    miwandb= WandbLogger(name='REsnet 18', project='MILOranges')
+    miwandb= WandbLogger(name=args.log_name, project='MILOranges')
     trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs, 'logger' : miwandb}
     
     

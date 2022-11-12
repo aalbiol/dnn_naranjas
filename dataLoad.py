@@ -28,6 +28,9 @@ def myloader(path):
 # Esto es el data set    
 class CImgFruitFolder(DatasetFolder):
     def __init__(self,*args, **kwargs):
+        for clave,val in kwargs.items():
+            if clave == 'target_transform':
+                self.target_transform = val
         super().__init__(*args, loader = myloader, extensions = ('.cimg',), **kwargs)
         
      
@@ -65,7 +68,13 @@ def my_collate_fn(data):
         'label': labels,
         'nviews': nviews
     }
-    
+
+def m_target_transform(target):
+    #print('m_target_transform:', target)
+    out= int(target>0)
+    #print('m_target_transform. In:', target, ' out:', out)
+    return out
+
 class FruitDataModule(pl.LightningDataModule):
     def __init__(self, train_set_folder = 'orange_data/train' , 
                 test_set_folder = 'orange_data/test',
@@ -100,10 +109,10 @@ class FruitDataModule(pl.LightningDataModule):
         ])        
         
      
-
-        self.train_dataset  = CImgFruitFolder(train_set_folder,transform = transform_train)
+        targ_transform = None
+        self.train_dataset  = CImgFruitFolder(train_set_folder,transform = transform_train, target_transform = targ_transform)
         
-        self.val_dataset  =  CImgFruitFolder(test_set_folder,transform = transform_test )
+        self.val_dataset  =  CImgFruitFolder(test_set_folder,transform = transform_test ,  target_transform = targ_transform)
 
         self.num_classes = len(self.train_dataset.classes)
     
