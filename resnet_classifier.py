@@ -73,7 +73,7 @@ class ResNetClassifier(pl.LightningModule):
         logits_fruit=[]
         for fruit in tmp:
             valsmax,posmax=torch.max(fruit,0,keepdim=True)
-            logits_fruit = valsmax
+            logits_fruit.append(valsmax)
          # El primer elemento corresponde a la clase bueno y deberá ignorarse en criterion   
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
