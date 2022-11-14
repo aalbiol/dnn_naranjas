@@ -28,15 +28,12 @@ def myloader(path):
 # Esto es el data set    
 class CImgFruitFolder(DatasetFolder):
     def __init__(self,*args, **kwargs):
-<<<<<<< Updated upstream
         for clave,val in kwargs.items():
             if clave == 'target_transform':
                 self.target_transform = val
-=======
-        self.target_transform = kwargs{'target_transform'}
->>>>>>> Stashed changes
+
         super().__init__(*args, loader = myloader, extensions = ('.cimg',), **kwargs)
-        
+    
      
 
         
@@ -74,15 +71,8 @@ def my_collate_fn(data):
     }
 
 def m_target_transform(target):
-<<<<<<< Updated upstream
-    #print('m_target_transform:', target)
-    out= int(target>0)
-    #print('m_target_transform. In:', target, ' out:', out)
-    return out
-=======
-    print('m_target_transform:', target)
     return target
->>>>>>> Stashed changes
+
 
 class FruitDataModule(pl.LightningDataModule):
     def __init__(self, train_set_folder = 'orange_data/train' , 
@@ -118,11 +108,11 @@ class FruitDataModule(pl.LightningDataModule):
         ])        
         
      
-<<<<<<< Updated upstream
+
         targ_transform = None
-=======
-        targ_transform = m_target_transform
->>>>>>> Stashed changes
+
+        #targ_transform = m_target_transform
+
         self.train_dataset  = CImgFruitFolder(train_set_folder,transform = transform_train, target_transform = targ_transform)
         
         self.val_dataset  =  CImgFruitFolder(test_set_folder,transform = transform_test ,  target_transform = targ_transform)

@@ -61,7 +61,9 @@ class ResNetClassifier(pl.LightningModule):
 
     def forward(self, X, nviews):
         Y_all_views = self.resnet_model(X)
-        tmp = torch.split(Y_all_views, nviews)
+        m_softmax = nn.Softmax(dim=1)
+        softmax_prob = m_softmax (Y_all_views)
+        tmp = torch.split(softmax_prob, nviews)
         
         #print("logits_views:", Y_all_views)
         
@@ -71,19 +73,10 @@ class ResNetClassifier(pl.LightningModule):
         logits_fruit=[]
         for fruit in tmp:
             valsmax,posmax=torch.max(fruit,0,keepdim=True)
-            #valsmin,posmin=torch.min(fruit[:,0],0,keepdim=True)
-            valsmin,posmin=torch.min(fruit,0,keepdim=True)
-            #logits_fruit.append(valsmax)
-            #logits_fruit.append(fruit[(posmin,),:])
-<<<<<<< Updated upstream
-=======
-            
->>>>>>> Stashed changes
-            logits_fruit.append( torch.cat((valsmin[:,(0,)],valsmax[:,1:]), dim=1) )
+            logits_fruit = val_max
+         # El primer elemento corresponde a la clase bueno y deberá ignorarse en criterion   
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
-        #print("logits_fruit:", logits_fruit)
-
         return logits_fruit
     
     def criterion(self, logits, labels, weight_loss = 0.5):
@@ -93,40 +86,19 @@ class ResNetClassifier(pl.LightningModule):
         #print("criterion_labels:",labels.shape)
 
         
+        target = logits * 0
 
-        #idx_bueno = torch.squeeze(torch.argwhere(labels==0))
-        #idx_malo = torch.squeeze(torch.argwhere(labels>0))
-        
-        bool_bueno = (labels==0)
-        bool_malo = (labels>0)
-        #print("bool_bueno:",bool_bueno)
+        for count, value in enumerate(labels):
+            target[count,value] = 1
 
-        binaryLoss = nn.BCEWithLogitsLoss(reduction='sum')
+        logits = logits[:,1:] # Quitar la categoría normal
+        target = target[:,1:]    
+
+        binaryLoss = nn.BCEWithLogitsLoss(reduction='mean')
         tipodefectoLoss = nn.CrossEntropyLoss(reduction='mean')
 
-        # loss1 =0
-        # loss2 =0
-        # if torch.any(bool_bueno):
-        #     logits_defs=logits[bool_bueno]
-        #     #print("logits_defs shape1:",logits_defs.shape)
-        #     logits_defs=logits_defs[:,1:]
-        #     #print("logits_defs shape2:",logits_defs.shape)
-        #     logits_bueno,_ = torch.max(logits_defs,1)
-        #     target_bueno = labels[bool_bueno].float()
-           
-        #    # print("logits shape:",logits.shape)
-        #    # print("logits_bueno :",logits_bueno.shape)
-        #    # print("target_bueno :",target_bueno.shape)
-        #     loss1 = binaryLoss(logits_bueno, target_bueno  )
-        
-        # if torch.any(bool_malo) > 0:
-        #     defectuosos_logits = logits[bool_malo]
-        #     defectuosos_logits = defectuosos_logits[:,1:]
-        #     defectuosos_labels = labels[bool_malo] -1           
-        #     loss2 += tipodefectoLoss(defectuosos_logits, defectuosos_labels)
-        # loss = weight_loss * loss1 + (1-weight_loss) * loss2    
-
-        loss = tipodefectoLoss(logits,labels)
+        loss = binaryLoss(logits,target)
+        #loss = tipodefectoLoss(logits,labels)
         return loss
             
         
