@@ -61,9 +61,10 @@ class ResNetClassifier(pl.LightningModule):
 
     def forward(self, X, nviews):
         Y_all_views = self.resnet_model(X)
-        m_softmax = nn.Softmax(dim=1)
-        softmax_prob = m_softmax (Y_all_views)
-        tmp = torch.split(softmax_prob, nviews)
+        #m_softmax = nn.Softmax(dim=1)
+        #softmax_prob = m_softmax (Y_all_views)
+        #tmp = torch.split(softmax_prob, nviews)
+        tmp = torch.split(Y_all_views, nviews)
         
         #print("logits_views:", Y_all_views)
         
@@ -93,6 +94,8 @@ class ResNetClassifier(pl.LightningModule):
 
         logits = logits[:,1:] # Quitar la categoría normal
         target = target[:,1:]    
+        print('logits:',logits)
+        print('target:',target)
 
         binaryLoss = nn.BCEWithLogitsLoss(reduction='mean')
         tipodefectoLoss = nn.CrossEntropyLoss(reduction='mean')
@@ -106,6 +109,16 @@ class ResNetClassifier(pl.LightningModule):
     def configure_optimizers(self):
         return self.optimizer(self.parameters(), lr=self.lr)
     
+    def m_acc(logits,labels):
+        probs=torch.nn.sigmoid(logits)
+        target = logits * 0
+        probs_u=(probs>0.5)
+        for count, value in enumerate(labels):
+            target[count,value] = 1
+        probs_u = probs_u[:,1:]
+        target = target[:,1:]
+        acc=(probs_u==target).type(torch.FloatTensor).mean()
+        return acc
 
     
     def training_step(self, batch, batch_idx):
@@ -124,7 +137,8 @@ class ResNetClassifier(pl.LightningModule):
  
         
 
-        
+        acc_train = m_acc(logits,labels)
+
         predictions=torch.argmax(logits,1) 
         acc_train = (predictions== labels).type(torch.FloatTensor).mean() 
         #acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
@@ -147,8 +161,8 @@ class ResNetClassifier(pl.LightningModule):
         logits = self(images, nviews)
         
         loss = self.criterion(logits, labels)
-        predictions=torch.argmax(logits,1)
-        acc_test = (predictions == labels).type(torch.FloatTensor).mean() 
+       
+        acc_test = m_acc(logits,labels)
         #acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
