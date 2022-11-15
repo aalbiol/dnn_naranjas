@@ -21,11 +21,20 @@ from typing import Tuple,Any
 from dataLoad import FruitDataModule
 
 
+
 # Here we define a new class to turn the ResNet model that we want to use as a feature extractor
 # into a pytorch-lightning module so that we can take advantage of lightning's Trainer object.
 # We aim to make it a little more general by allowing users to define the number of prediction classes.
 
 
+
+def m_accuracy(logits,labels,printout=False):
+
+    preds_class = logits.argmax(axis = 1)
+
+
+    acc=(preds_class==labels).type(torch.FloatTensor).mean()
+    return acc
     
 class ResNetClassifier(pl.LightningModule):
     def __init__(self, num_classes, resnet_version,
@@ -34,8 +43,8 @@ class ResNetClassifier(pl.LightningModule):
         super().__init__()
 
         self.input_size=(256,256);
-        self.mean_normalization = (0.5,)
-        self.std_normalization = (0.5,)
+        #self.mean_normalization = (0.5,)
+        #self.std_normalization = (0.5,)
         self.__dict__.update(locals())
         self.batch_size=batch_size
         resnets = {
@@ -60,11 +69,11 @@ class ResNetClassifier(pl.LightningModule):
                     param.requires_grad = False
 
     def forward(self, X, nviews):
-        Y_all_views = self.resnet_model(X)
-        #m_softmax = nn.Softmax(dim=1)
-        #softmax_prob = m_softmax (Y_all_views)
-        #tmp = torch.split(softmax_prob, nviews)
-        tmp = torch.split(Y_all_views, nviews)
+        logits_all_views = self.resnet_model(X)
+        probs_all_views = F.softmax(logits_all_views, dim = 1)
+        logits_fruits = torch.split(logits_all_views, nviews)
+        probs_fruits = torch.split(probs_all_views, nviews)
+        #tmp = torch.split(Y_all_views, nviews)
         
         #print("logits_views:", Y_all_views)
         
@@ -72,9 +81,12 @@ class ResNetClassifier(pl.LightningModule):
         # Se pueden fusionar por max o mean . La fusion debe ser conmutativa
         #logits_fruit = torch.concat([torch.mean(fruit, axis = 0, keepdim= True) for fruit in tmp],axis = 0)
         logits_fruit=[]
-        for fruit in tmp:
-            valsmax,posmax=torch.max(fruit,0,keepdim=True)
-            logits_fruit.append(valsmax)
+        for logits, probs in zip(logits_fruits, probs_fruits):
+            max_probs = torch.max(probs[:,1:],1)
+            fila = torch.argmax(max_probs[0])
+
+        
+            logits_fruit.append(logits[(fila,),:])
          # El primer elemento corresponde a la clase bueno y deberá ignorarse en criterion   
         logits_fruit = torch.concat(logits_fruit,axis = 0)
         
@@ -87,21 +99,20 @@ class ResNetClassifier(pl.LightningModule):
         #print("criterion_labels:",labels.shape)
 
         
-        target = logits * 0
+        # target = logits * 0
 
-        for count, value in enumerate(labels):
-            target[count,value] = 1
+        # for count, value in enumerate(labels):
+        #     target[count,value] = 1
 
-        logits = logits[:,1:] # Quitar la categoría normal
-        target = target[:,1:]    
-        print('logits:',logits)
-        print('target:',target)
+        # logits = logits[:,1:] # Quitar la categoría normal
+        # target = target[:,1:]    
+
 
         binaryLoss = nn.BCEWithLogitsLoss(reduction='mean')
         tipodefectoLoss = nn.CrossEntropyLoss(reduction='mean')
 
-        loss = binaryLoss(logits,target)
-        #loss = tipodefectoLoss(logits,labels)
+        #loss = binaryLoss(logits,target)
+        loss = tipodefectoLoss(logits,labels)
         return loss
             
         
@@ -109,16 +120,7 @@ class ResNetClassifier(pl.LightningModule):
     def configure_optimizers(self):
         return self.optimizer(self.parameters(), lr=self.lr)
     
-    def m_acc(logits,labels):
-        probs=torch.nn.sigmoid(logits)
-        target = logits * 0
-        probs_u=(probs>0.5)
-        for count, value in enumerate(labels):
-            target[count,value] = 1
-        probs_u = probs_u[:,1:]
-        target = target[:,1:]
-        acc=(probs_u==target).type(torch.FloatTensor).mean()
-        return acc
+    
 
     
     def training_step(self, batch, batch_idx):
@@ -137,10 +139,10 @@ class ResNetClassifier(pl.LightningModule):
  
         
 
-        acc_train = m_acc(logits,labels)
+        acc_train = m_accuracy(logits,labels)
 
         predictions=torch.argmax(logits,1) 
-        acc_train = (predictions== labels).type(torch.FloatTensor).mean() 
+       
         #acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
@@ -162,7 +164,7 @@ class ResNetClassifier(pl.LightningModule):
         
         loss = self.criterion(logits, labels)
        
-        acc_test = m_acc(logits,labels)
+        acc_test = m_accuracy(logits,labels,True)
         #acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
@@ -222,7 +224,7 @@ if __name__ == "__main__":
                             transfer = args.transfer, tune_fc_only = args.tune_fc_only)
     # Instantiate lightning trainer and train model
     miwandb= WandbLogger(name=args.log_name, project='MILOranges')
-    trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs, 'logger' : miwandb}
+    trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs, 'logger' : miwandb, 'auto_scale_batch_size':True}
     
     
     
