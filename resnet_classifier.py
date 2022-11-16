@@ -78,6 +78,8 @@ class ResNetClassifier(pl.LightningModule):
                     param.requires_grad = False
         self.confusion_matrix_train = ConfusionMatrix(num_classes=num_classes, normalize=None)
         self.confusion_matrix_val = ConfusionMatrix(num_classes=num_classes, normalize=None)
+        self.class_weights=torch.ones(num_classes)
+        self.class_weights[0]=6.0
 
     def forward(self, X, nviews):
         logits_all_views = self.resnet_model(X)
@@ -120,7 +122,7 @@ class ResNetClassifier(pl.LightningModule):
 
 
         binaryLoss = nn.BCEWithLogitsLoss(reduction='mean')
-        tipodefectoLoss = nn.CrossEntropyLoss(reduction='mean')
+        tipodefectoLoss = nn.CrossEntropyLoss(weights=self.class_weights, reduction='mean')
 
         #loss = binaryLoss(logits,target)
         loss = tipodefectoLoss(logits,labels)
