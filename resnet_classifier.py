@@ -15,10 +15,14 @@ from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 import wandb
+import wandb.plot
 from pytorch_lightning.loggers import WandbLogger
 from typing import Tuple,Any
 
 from dataLoad import FruitDataModule
+from torchmetrics import ConfusionMatrix
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 
@@ -39,8 +43,13 @@ def m_accuracy(logits,labels,printout=False):
 class ResNetClassifier(pl.LightningModule):
     def __init__(self, num_classes, resnet_version,
                 optimizer='adam', lr=1e-3, batch_size=16,
-                transfer=True, tune_fc_only=True):
+                transfer=True, tune_fc_only=True, class_names=None):
         super().__init__()
+
+        if class_names is not None:
+            self.class_names=class_names
+        else:
+            self.class_names=list(range(num_classes))
 
         self.input_size=(256,256);
         #self.mean_normalization = (0.5,)
@@ -67,6 +76,8 @@ class ResNetClassifier(pl.LightningModule):
             for child in list(self.resnet_model.children())[:-1]:
                 for param in child.parameters():
                     param.requires_grad = False
+        self.confusion_matrix_train = ConfusionMatrix(num_classes=num_classes, normalize=None)
+        self.confusion_matrix_val = ConfusionMatrix(num_classes=num_classes, normalize=None)
 
     def forward(self, X, nviews):
         logits_all_views = self.resnet_model(X)
@@ -141,7 +152,7 @@ class ResNetClassifier(pl.LightningModule):
 
         acc_train = m_accuracy(logits,labels)
 
-        predictions=torch.argmax(logits,1) 
+        preds_class = logits.argmax(axis = 1)
        
         #acc_train_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
         # perform logging
@@ -151,7 +162,7 @@ class ResNetClassifier(pl.LightningModule):
         #wandb.log({'accuracy': train_acc, 'loss': loss})
         #self.log("train_acc_healthy", acc_healthy, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         #self.log("train_acc_tipo_defecto", acc_tipo_defecto, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-
+        self.confusion_matrix_train.update(preds=preds_class, target=labels)
         return loss
 
 
@@ -163,6 +174,7 @@ class ResNetClassifier(pl.LightningModule):
         logits = self(images, nviews)
         
         loss = self.criterion(logits, labels)
+        preds_class = logits.argmax(axis = 1)
        
         acc_test = m_accuracy(logits,labels,True)
         #acc_test_good_bad= ((predictions>0) == (labels>0)).type(torch.FloatTensor).mean() 
@@ -170,9 +182,49 @@ class ResNetClassifier(pl.LightningModule):
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("val_acc", acc_test, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         #self.log("val_acc_good_bad", acc_test_good_bad, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.confusion_matrix_val.update(preds=preds_class, target=labels)
 
         
+    def on_validation_epoch_end(self, ) -> None:
+        
+        CM_val = self.confusion_matrix_val.compute()
+        self.confusion_matrix_val.reset()
+        
+        CM_train = self.confusion_matrix_train.compute()
+        self.confusion_matrix_train.reset()              
+        CM_val = CM_val.cpu().numpy()
+        CM_train = CM_train.cpu().numpy()
+        print('Confusion Matrix Train:', CM_train)
+        print('Confusion Matrix Val:', CM_val)
+        
+        y_true=[]
+        preds=[]
+        class_names=self.class_names
+        for i in range(self.num_classes):
+            for j in range(self.num_classes):             
+                    y_true += [i]*CM_val[i,j]
+                    preds+= [j]*CM_val[i,j]
+                
 
+        # fields = {
+        #     "Actual": "Actual",
+        #     "Predicted": "Predicted",
+        #     "nPredictions": "nPredictions",
+        # }
+        # title = "Val Confusion Matrix"
+        # wandbtable =  wandb.plot_table(
+        #     "Val Confus Matrix",
+        #     wandb.Table(columns=["Actual", "Predicted", "nPredictions"], data=CM_val),
+        #     fields,
+        #     {"title": title},
+        # )
+        #plotCM=wandb.plot.confusion_matrix(probs=None, preds=preds, y_true=y_true, class_names=class_names)
+        #self.log("conf_mat" , plotCM)
+  
+  
+        
+        
+        #super.on_validation_epoch_end()
 
     
     def test_step(self, batch, batch_idx):
@@ -221,7 +273,8 @@ if __name__ == "__main__":
     model = ResNetClassifier(num_classes = datamodule.num_classes, resnet_version = args.model,
                             optimizer = args.optimizer, lr = args.learning_rate,
                             batch_size = args.batch_size,
-                            transfer = args.transfer, tune_fc_only = args.tune_fc_only)
+                            transfer = args.transfer, tune_fc_only = args.tune_fc_only,
+                            class_names = datamodule.train_dataset.classes)
     # Instantiate lightning trainer and train model
     miwandb= WandbLogger(name=args.log_name, project='MILOranges')
     trainer_args = {'gpus': args.gpus, 'max_epochs': args.num_epochs, 'logger' : miwandb, 'auto_scale_batch_size':True}

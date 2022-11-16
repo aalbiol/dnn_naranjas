@@ -75,8 +75,8 @@ def m_target_transform(target):
 
 
 class FruitDataModule(pl.LightningDataModule):
-    def __init__(self, train_set_folder = 'orange_data/train' , 
-                test_set_folder = 'orange_data/test',
+    def __init__(self, train_set_folder = '/home/aalbiol/orange_3_clases/train' , 
+                test_set_folder = '/home/aalbiol/orange_3_clases/test',
                 batch_size: int =5,  
                 imsize = (256,256), 
                 num_workers = -1, **kwargs):
