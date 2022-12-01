@@ -17,6 +17,8 @@ import pytorch_lightning as pl
 from typing import Tuple,Any
 import pycimg
 import multiprocessing
+import numpy as np
+import random
 
 def myloader(path):
     '''
@@ -40,6 +42,10 @@ class CImgFruitFolder(DatasetFolder):
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         path, target = self.samples[index]
         samples = self.loader(path) #Lista de imagenes
+        
+        #random.shuffle(samples)
+        #samples=samples[3:] # Descartar 3 vistas de cada fruto para evitar overfitting
+        
         samples_transformed = []
         for sample in samples:
             if self.transform is not None:
@@ -53,7 +59,7 @@ class CImgFruitFolder(DatasetFolder):
 
 
         # Tensor gordo
-        return sample,target
+        return sample,target,path
  
 def my_collate_fn(data):
     
@@ -64,10 +70,13 @@ def my_collate_fn(data):
     
     labels = [d[1] for d in data]
     labels = torch.tensor(labels) #(5)
+
+    paths = [d[2] for d in data]
     return { #(6)
         'images': images, 
         'label': labels,
-        'nviews': nviews
+        'nviews': nviews,
+        'paths': paths
     }
 
 def m_target_transform(target):
@@ -75,8 +84,7 @@ def m_target_transform(target):
 
 
 class FruitDataModule(pl.LightningDataModule):
-    def __init__(self, train_set_folder = '/home/aalbiol/orange_3_clases/train' , 
-                test_set_folder = '/home/aalbiol/orange_3_clases/test',
+    def __init__(self, train_set_folder = 'orange_data/train', test_set_folder = 'orange_data/test', predict_set_folder = 'orange_data/train' , 
                 batch_size: int =5,  
                 imsize = (256,256), 
                 num_workers = -1, **kwargs):
@@ -97,8 +105,7 @@ class FruitDataModule(pl.LightningDataModule):
                                   
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])        
-
+        ])      
 
         transform_test = transforms.Compose([
         transforms.Resize((250,250)),
@@ -107,18 +114,12 @@ class FruitDataModule(pl.LightningDataModule):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])        
         
-     
-
-        targ_transform = None
-
-        #targ_transform = m_target_transform
-
-        self.train_dataset  = CImgFruitFolder(train_set_folder,transform = transform_train, target_transform = targ_transform)
-        
-        self.val_dataset  =  CImgFruitFolder(test_set_folder,transform = transform_test ,  target_transform = targ_transform)
+        print('FruitDataModule.init predict_set_folder',predict_set_folder)
+        self.train_dataset = CImgFruitFolder(train_set_folder,transform = transform_train )
+        self.val_dataset = CImgFruitFolder(test_set_folder,transform = transform_test )
+        self.predict_dataset = CImgFruitFolder(predict_set_folder,transform = transform_test )
 
         self.num_classes = len(self.train_dataset.classes)
-    
         print(f"num clases = {self.num_classes}")
         print(f"len total trainset =   {len(self.train_dataset )}")
         print(f"len total testset =   {len(self.val_dataset )}")
@@ -127,7 +128,8 @@ class FruitDataModule(pl.LightningDataModule):
         print("batch_size in FruitDataModule", self.batch_size)
         
 
-        self.save_hyperparameters()
+  
+  
 
     def prepare_data(self):
         # if not pathlib.Path(self.root_images).exists():
@@ -148,6 +150,9 @@ class FruitDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         print("batch_size in Dataloader train", self.batch_size)
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, collate_fn=my_collate_fn)
+    def predict_dataloader(self):
+        print("batch_size in predict data loader", self.batch_size)
+        return DataLoader(self.predict_dataset , batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, collate_fn=my_collate_fn)
 
     def val_dataloader(self):
         print("batch_size in Dataloader train", self.batch_size)
