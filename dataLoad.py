@@ -1,28 +1,24 @@
-import sys
+
 import warnings
-from pathlib import Path
-from argparse import ArgumentParser
 warnings.filterwarnings('ignore')
 
 # torch and lightning imports
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.models as models
-from torch.optim import SGD, Adam
+import pytorch_lightning as pl
+
 from torchvision import transforms
 from torchvision.datasets import DatasetFolder
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-from typing import Tuple,Any
+
 import pycimg
 import multiprocessing
-import numpy as np
+from typing import Tuple,Any
+
 import random
 
 def myloader(path):
     '''
-    Lee CIMg y devuelve lista de PILS
+    Lee CIMg y devuelve lista de PILS tantos como vistas tenga el fruto
     '''
     pils=pycimg.cimgread(path)
     return pils
@@ -30,23 +26,14 @@ def myloader(path):
 # Esto es el data set    
 class CImgFruitFolder(DatasetFolder):
     def __init__(self,*args, **kwargs):
-        for clave,val in kwargs.items():
-            if clave == 'target_transform':
-                self.target_transform = val
-
         super().__init__(*args, loader = myloader, extensions = ('.cimg',), **kwargs)
     
-     
-
-        
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+            
+    def __getitem__(self, index: int) -> Tuple[Any, Any,Any]:
         path, target = self.samples[index]
-        samples = self.loader(path) #Lista de imagenes
-        
-        #random.shuffle(samples)
-        #samples=samples[3:] # Descartar 3 vistas de cada fruto para evitar overfitting
-        
-        samples_transformed = []
+        samples = self.loader(path) # Fruto: Lista de vistas
+                
+        samples_transformed = [] # cada vista sufre una aumentacion diferente
         for sample in samples:
             if self.transform is not None:
                 sample = self.transform(sample)
@@ -57,16 +44,18 @@ class CImgFruitFolder(DatasetFolder):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-
-        # Tensor gordo
+        # sample es un tensor con nviewsx3250x250
+        # target es 0,1,2
+        # path nombre del archivo
         return sample,target,path
  
-def my_collate_fn(data):
+def my_collate_fn(data): # Genera un batch a partir de una lista de frutos
     
     images = [d[0] for d in data]
-    images = torch.concat(images, axis = 0)
+    images = torch.concat(images, axis = 0) # tendra dimensiones numvistastotalbatch, 3,250,250
     
-    nviews = [d[0].shape[0] for d in data]
+    nviews = [d[0].shape[0] for d in data] # contiene (nviews0, nviews1,,... ) con tantos elementos como frutos tenga el batch
+    # Sirve para poder trocear luego por frutos
     
     labels = [d[1] for d in data]
     labels = torch.tensor(labels) #(5)
@@ -84,19 +73,19 @@ def m_target_transform(target):
 
 
 class FruitDataModule(pl.LightningDataModule):
-    def __init__(self, train_set_folder = 'orange_data/train', test_set_folder = 'orange_data/test', predict_set_folder = 'orange_data/train' , 
+    def __init__(self, train_set_folder = None, 
+                 test_set_folder = None, 
+                 predict_set_folder = None , 
                 batch_size: int =5,  
-                imsize = (256,256), 
-                num_workers = -1, **kwargs):
+                num_workers = -1,
+                num_clases = None, **kwargs):
         super().__init__()
 
         print("Options in DataModule", kwargs)
         
         self.batch_size = batch_size
-
         self.num_workers = num_workers if num_workers > 0 else multiprocessing.cpu_count()-1
         
-
         transform_train = transforms.Compose([
         transforms.Resize((250,250)),
         transforms.RandomHorizontalFlip(0.5),
@@ -107,44 +96,51 @@ class FruitDataModule(pl.LightningDataModule):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])      
 
+
         transform_test = transforms.Compose([
         transforms.Resize((250,250)),
-               
+              
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])        
         
-        print('FruitDataModule.init predict_set_folder',predict_set_folder)
-        self.train_dataset = CImgFruitFolder(train_set_folder,transform = transform_train )
-        self.val_dataset = CImgFruitFolder(test_set_folder,transform = transform_test )
-        self.predict_dataset = CImgFruitFolder(predict_set_folder,transform = transform_test )
+        if train_set_folder is not None:
+            self.train_dataset = CImgFruitFolder(train_set_folder,transform = transform_train )
+        else:
+            self.train_dataset= None
+            
+        if test_set_folder is not None:    
+            self.val_dataset = CImgFruitFolder(test_set_folder,transform = transform_test )
+        else:
+            self.val_dataset = None
+        
+        if predict_set_folder is not None:     
+            self.predict_dataset = CImgFruitFolder(predict_set_folder,transform = transform_test )
+        else:
+            self.predict_dataset = None
 
-        self.num_classes = len(self.train_dataset.classes)
+        if num_clases is None:
+            self.num_classes = len(self.train_dataset.classes)
+        else:
+            self.num_classes=num_clases
+            
         print(f"num clases = {self.num_classes}")
-        print(f"len total trainset =   {len(self.train_dataset )}")
-        print(f"len total testset =   {len(self.val_dataset )}")
-        print(self.train_dataset.classes)
-        print(self.train_dataset.class_to_idx)
+        if train_set_folder is not None:
+            print(f"len total trainset =   {len(self.train_dataset )}")
+            print(self.train_dataset.classes)
+            print(self.train_dataset.class_to_idx)
+        if test_set_folder is not None:
+            print(f"len total testset =   {len(self.val_dataset )}")
+        if predict_set_folder is not None:
+            print(f"len total predictset =   {len(self.predict_dataset )}")            
+
         print("batch_size in FruitDataModule", self.batch_size)
         
 
-  
-  
-
     def prepare_data(self):
-        # if not pathlib.Path(self.root_images).exists():
-        #     print("Get fisabio covid19 dataset")
         pass
 
     def setup(self, stage=None):
-        # build dataset
-        # caltect_dataset = ImageFolder('Caltech101')
-        # # split dataset
-        # self.train, self.val, self.test = random_split(caltect_dataset, [6500, 1000, 1645])
-        # self.train.dataset.transform = self.augmentation
-        # self.val.dataset.transform = self.transform
-        # self.test.dataset.transform = self.transform
-        #print("Nothing to do in setup datasets, partitions already given")
         return None
         
     def train_dataloader(self):
@@ -155,11 +151,10 @@ class FruitDataModule(pl.LightningDataModule):
         return DataLoader(self.predict_dataset , batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, collate_fn=my_collate_fn)
 
     def val_dataloader(self):
-        print("batch_size in Dataloader train", self.batch_size)
+        print("batch_size in Dataloader val", self.batch_size)
         return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=False,shuffle=False, collate_fn=my_collate_fn)
 
-    # def test_dataloader(self):
-    #     return DataLoader(self.val_dataset, batch_size=self.batch_size,  num_workers=self.num_workers, drop_last=False,shuffle=False)
+
 
     @staticmethod
     def add_model_specific_args(parser):
