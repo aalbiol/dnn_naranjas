@@ -44,11 +44,16 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--initial_model", default=None, help="""Initial Model . If None Resnet is used""")
     parser.add_argument("-g", "--gpus", help="""Enables GPU acceleration.""", type=int, default= 0)
     parser.add_argument("--log_name",help="""WandB log name""", default='Resnet 18')
+    parser.add_argument("--train_set_folder",help="""Folder containing the training data. Each subdirectory is a class""",
+                        default='/home/aalbiol/reanotado_3_clases_con_Sara/train')
 
+    parser.add_argument("--test_set_folder",help="""Folder containing the validation data. Each subdirectory is a class""",
+                        default='/home/aalbiol/reanotado_3_clases_con_Sara/test')
     args = parser.parse_args()
 
 
-    datamodule = FruitDataModule(batch_size=args.batch_size,train_set_folder = '/home/aalbiol/reanotado_3_clases_con_Sara/train', test_set_folder = '/home/aalbiol/reanotado_3_clases_con_Sara/test')
+    datamodule = FruitDataModule(batch_size=args.batch_size,train_set_folder = args.train_set_folder, 
+    test_set_folder =  args.test_set_folder)
 
     # # Instantiate Model
     
@@ -78,5 +83,5 @@ if __name__ == "__main__":
     
     trainer.fit(model, datamodule=datamodule)
     # Save trained model
-    save_path = (args.save_path if args.save_path is not None else '/') + 'trained_model.ckpt'
+    save_path = (args.save_path if args.save_path is not None else '/') + 'Resnet_MIL_trained_model.ckpt'
     trainer.save_checkpoint(save_path)
